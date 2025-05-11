@@ -1,9 +1,4 @@
-00840061102;CINTIA RODRIGUES;cintia.rodrigues44@gmail.com
-00615221556;CINTIA RODRIGUES;cintia.rodrigues45@hotmail.com
-05740498783;CINTIA RODRIGUES;cintia.rodrigues46@outlook.com
-16992284851;CINTIA RODRIGUES;cintia.rodrigues47@ig.com.br
-22416065882;CINTIA RODRIGUES;cintia.rodrigues48@gmail.com
-09294797775;CINTIA RODRIGUES;cintia.rodrigues49@hotmail.com
+
 00753633051;CINTIA RODRIGUES;cintia.rodrigues50@outlook.com
 36731183822;CINTIA RODRIGUES;cintia.rodrigues51@ig.com.br
 37187358814;CINTIA RODRIGUES;cintia.rodrigues52@gmail.com

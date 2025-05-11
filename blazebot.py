@@ -42,6 +42,9 @@ WINDOW_HEIGHT = 640
 monitor = get_monitors()[0]
 screen_width = monitor.width
 
+emails_sucesso = []
+emails_falha = []
+
 
 def executar(cpf, name, email, pos_x):
     print(f"\n[{agora()}] 🖥️ Iniciando navegador na posição X={pos_x} com:")
@@ -149,9 +152,11 @@ def executar(cpf, name, email, pos_x):
 
         driver.find_element(By.XPATH, "//button[contains(text(), 'Comece já')]").click()
         print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
+        emails_sucesso.append(email)
 
     except Exception as e:
         print(f"[{agora()}] ❌ Erro durante o processo com {email}: {e}")
+        emails_falha.append(email)
 
     print(f"[{agora()}] ✅ Navegador finalizado para {email}. Ele permanecerá aberto.")
     input("🔚 Pressione ENTER para encerrar esta aba manualmente...")
@@ -173,6 +178,16 @@ try:
 
     for t in threads:
         t.join()
+
+    # Exibe o resumo final
+    print("\n📊 RESUMO FINAL:")
+    print(f"✅ Cadastros bem-sucedidos: {len(emails_sucesso)}")
+    for email in emails_sucesso:
+        print(f"   - {email}")
+
+    print(f"\n❌ Cadastros com erro: {len(emails_falha)}")
+    for email in emails_falha:
+        print(f"   - {email}")
 
 except KeyboardInterrupt:
     print(
