@@ -2,11 +2,19 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 import random
 import time
 import os
 import threading
 from screeninfo import get_monitors
+from datetime import datetime
+
+
+# Timestamp formatado
+def agora():
+    return datetime.now().strftime("%H:%M:%S")
+
 
 # Lista de user agents
 user_agents_list = [
@@ -36,6 +44,11 @@ screen_width = monitor.width
 
 
 def executar(cpf, name, email, pos_x):
+    print(f"\n[{agora()}] 🖥️ Iniciando navegador na posição X={pos_x} com:")
+    print(f"   👤 Nome: {name}")
+    print(f"   📧 Email: {email}")
+    print(f"   🆔 CPF: {cpf}\n")
+
     user_agent = random.choice(user_agents_list)
 
     options = uc.ChromeOptions()
@@ -60,7 +73,7 @@ def executar(cpf, name, email, pos_x):
     wait = WebDriverWait(driver, 20)
 
     try:
-        print("✅ Página carregada")
+        print(f"[{agora()}] ✅ Página carregada")
 
         btn_cookie = wait.until(
             EC.element_to_be_clickable(
@@ -70,7 +83,7 @@ def executar(cpf, name, email, pos_x):
                 )
             )
         )
-        print("🍪 Aceitando cookies")
+        print(f"[{agora()}] 🍪 Aceitando cookies")
         btn_cookie.click()
         time.sleep(1)
 
@@ -82,7 +95,7 @@ def executar(cpf, name, email, pos_x):
                 )
             )
         )
-        print("🔞 Confirmando idade")
+        print(f"[{agora()}] 🔞 Confirmando idade")
         btn_idade.click()
         time.sleep(1)
 
@@ -94,52 +107,75 @@ def executar(cpf, name, email, pos_x):
                 )
             )
         )
-        print("📝 Abrindo modal de cadastro")
+        print(f"[{agora()}] 📝 Abrindo modal de cadastro")
         btn_cadastro.click()
         time.sleep(2)
 
-        print("⌨️ Preenchendo e-mail, senha e CPF")
+        print(f"[{agora()}] ⌨️ Preenchendo e-mail, senha e CPF")
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(
             email
         )
         wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(
             "SenhaSegura123"
         )
-        wait.until(EC.presence_of_element_located((By.NAME, "cpf"))).send_keys(cpf)
+
+        # Preencher CPF com ActionChains
+        print(f"[{agora()}] ⌨️ Digitando CPF com ActionChains...")
+        cpf_input = wait.until(
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, 'input[data-testid="national-id"]')
+            )
+        )
+        cpf_input.click()
+        time.sleep(0.5)
+        actions = ActionChains(driver)
+        for char in cpf:
+            actions.send_keys(char)
+            actions.pause(0.1)
+        actions.perform()
 
         checkbox = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="terms"]'))
         )
         driver.execute_script("arguments[0].click();", checkbox)
 
-        print("🛡️ Aguarde o CAPTCHA ser resolvido manualmente...")
+        print(f"[{agora()}] 🛡️ Aguardando o CAPTCHA ser resolvido manualmente...")
         WebDriverWait(driver, 180).until(
             EC.element_to_be_clickable(
                 (By.XPATH, "//button[contains(text(), 'Comece já') and not(@disabled)]")
             )
         )
-        print("✅ CAPTCHA resolvido! Enviando cadastro...")
+        print(f"[{agora()}] ✅ CAPTCHA resolvido! Enviando cadastro...")
 
         driver.find_element(By.XPATH, "//button[contains(text(), 'Comece já')]").click()
-        print(f"🎉 Cadastro finalizado com sucesso para {email}!")
+        print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
 
     except Exception as e:
-        print(f"❌ Erro durante o processo: {e}")
+        print(f"[{agora()}] ❌ Erro durante o processo com {email}: {e}")
 
-    input("🔚 Pressione ENTER para sair...")
+    print(f"[{agora()}] ✅ Navegador finalizado para {email}. Ele permanecerá aberto.")
+    input("🔚 Pressione ENTER para encerrar esta aba manualmente...")
     driver.quit()
 
 
+# Quantas instâncias abrir
 qtd = int(input("Quantas instâncias deseja abrir? "))
 threads = []
 
-for i in range(min(qtd, len(linhas))):
-    cpf, name, email = linhas[i].split(";")
-    pos_x = (i * WINDOW_WIDTH) % screen_width
-    t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
-    t.start()
-    threads.append(t)
-    time.sleep(1)
+try:
+    for i in range(min(qtd, len(linhas))):
+        cpf, name, email = linhas[i].split(";")
+        pos_x = (i * WINDOW_WIDTH) % screen_width
+        t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
+        t.start()
+        threads.append(t)
+        time.sleep(1)
 
-for t in threads:
-    t.join()
+    for t in threads:
+        t.join()
+
+except KeyboardInterrupt:
+    print(
+        f"\n[{agora()}] 🛑 Execução interrompida com Ctrl+C. Os navegadores continuarão abertos."
+    )
+    exit(0)
