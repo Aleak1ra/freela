@@ -9,6 +9,10 @@ import os
 import threading
 from screeninfo import get_monitors
 from datetime import datetime
+from webdriver_manager.chrome import ChromeDriverManager
+
+# Instala automaticamente o driver compatível com o Chrome instalado
+driver_path = ChromeDriverManager().install()
 
 
 # Timestamp formatado
@@ -69,7 +73,12 @@ def executar(cpf, name, email, pos_x):
     )
     options.add_argument("--lang=pt-BR")
 
-    driver = uc.Chrome(options=options, headless=False, use_subprocess=True)
+    driver = uc.Chrome(
+        driver_executable_path=driver_path,
+        options=options,
+        headless=False,
+        use_subprocess=True,
+    )
     driver.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     driver.set_window_position(pos_x, 0)
     driver.get(link)
@@ -122,7 +131,6 @@ def executar(cpf, name, email, pos_x):
             "SenhaSegura123"
         )
 
-        # Preencher CPF com ActionChains
         print(f"[{agora()}] ⌨️ Digitando CPF com ActionChains...")
         cpf_input = wait.until(
             EC.element_to_be_clickable(
@@ -179,7 +187,6 @@ try:
     for t in threads:
         t.join()
 
-    # Exibe o resumo final
     print("\n📊 RESUMO FINAL:")
     print(f"✅ Cadastros bem-sucedidos: {len(emails_sucesso)}")
     for email in emails_sucesso:
