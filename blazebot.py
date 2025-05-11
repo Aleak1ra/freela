@@ -5,6 +5,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import random
 import time
 import os
+import threading
+from screeninfo import get_monitors
 
 # Lista de user agents
 user_agents_list = [
@@ -21,107 +23,123 @@ with open("link.txt", "r", encoding="utf-8") as f:
 if not link.startswith("http"):
     raise ValueError("Link inválido no link.txt")
 
-# Lê o primeiro CPF e e-mail do arquivo
+# Lê os CPFs e e-mails do arquivo
 with open("names_cpfs_emails.txt", "r", encoding="utf-8") as f:
-    line = f.readline().strip()
-    cpf, name, email = line.split(";")
+    linhas = [linha.strip() for linha in f if linha.strip()]
 
-# Randomizar user-agent
-user_agent = random.choice(user_agents_list)
+WINDOW_WIDTH = 360
+WINDOW_HEIGHT = 640
 
-# Configurar Chrome invisível
-options = uc.ChromeOptions()
-options.add_argument("--disable-popup-blocking")
-options.add_argument("--disable-blink-features=AutomationControlled")
-options.add_argument("--disable-extensions")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-infobars")
-options.add_argument("--window-size=360,640")
-# options.add_argument("--app=https://ssl-judge2.api.proxyscrape.com/")
-options.add_argument("--incognito")
-options.add_argument(f"user-agent={user_agent}")
-options.add_experimental_option(
-    "prefs", {"profile.default_content_setting_values.notifications": 2}
-)
-options.add_argument("--lang=pt-BR")
+# Obter largura da tela
+monitor = get_monitors()[0]
+screen_width = monitor.width
 
-driver = uc.Chrome(options=options, headless=False, use_subprocess=True)
-driver.set_window_size(360, 640)
-driver.get(link)
-wait = WebDriverWait(driver, 20)
 
-try:
-    print("✅ Página carregada")
+def executar(cpf, name, email, pos_x):
+    user_agent = random.choice(user_agents_list)
 
-    # Aceitar cookies
-    btn_cookie = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "//div[contains(@class, 'policy-regulation-button-container')]//button[contains(text(), 'ACEITAR TODOS OS COOKIES')]",
+    options = uc.ChromeOptions()
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--window-size=360,640")
+    options.add_argument("--incognito")
+    options.add_argument(f"user-agent={user_agent}")
+    options.add_experimental_option(
+        "prefs", {"profile.default_content_setting_values.notifications": 2}
+    )
+    options.add_argument("--lang=pt-BR")
+
+    driver = uc.Chrome(options=options, headless=False, use_subprocess=True)
+    driver.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
+    driver.set_window_position(pos_x, 0)
+    driver.get(link)
+    wait = WebDriverWait(driver, 20)
+
+    try:
+        print("✅ Página carregada")
+
+        btn_cookie = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//div[contains(@class, 'policy-regulation-button-container')]//button[contains(text(), 'ACEITAR TODOS OS COOKIES')]",
+                )
             )
         )
-    )
-    print("🍪 Aceitando cookies")
-    btn_cookie.click()
+        print("🍪 Aceitando cookies")
+        btn_cookie.click()
+        time.sleep(1)
+
+        btn_idade = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//div[contains(@class, 'buttons')]//button[contains(text(), 'Eu tenho mais de 18 anos')]",
+                )
+            )
+        )
+        print("🔞 Confirmando idade")
+        btn_idade.click()
+        time.sleep(1)
+
+        btn_cadastro = wait.until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[contains(@class, 'sign-up') and contains(text(), 'Cadastre-se')]",
+                )
+            )
+        )
+        print("📝 Abrindo modal de cadastro")
+        btn_cadastro.click()
+        time.sleep(2)
+
+        print("⌨️ Preenchendo e-mail, senha e CPF")
+        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(
+            email
+        )
+        wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(
+            "SenhaSegura123"
+        )
+        wait.until(EC.presence_of_element_located((By.NAME, "cpf"))).send_keys(cpf)
+
+        checkbox = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="terms"]'))
+        )
+        driver.execute_script("arguments[0].click();", checkbox)
+
+        print("🛡️ Aguarde o CAPTCHA ser resolvido manualmente...")
+        WebDriverWait(driver, 180).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//button[contains(text(), 'Comece já') and not(@disabled)]")
+            )
+        )
+        print("✅ CAPTCHA resolvido! Enviando cadastro...")
+
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Comece já')]").click()
+        print(f"🎉 Cadastro finalizado com sucesso para {email}!")
+
+    except Exception as e:
+        print(f"❌ Erro durante o processo: {e}")
+
+    input("🔚 Pressione ENTER para sair...")
+    driver.quit()
+
+
+qtd = int(input("Quantas instâncias deseja abrir? "))
+threads = []
+
+for i in range(min(qtd, len(linhas))):
+    cpf, name, email = linhas[i].split(";")
+    pos_x = (i * WINDOW_WIDTH) % screen_width
+    t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
+    t.start()
+    threads.append(t)
     time.sleep(1)
 
-    # Confirmar maior de idade
-    btn_idade = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "//div[contains(@class, 'buttons')]//button[contains(text(), 'Eu tenho mais de 18 anos')]",
-            )
-        )
-    )
-    print("🔞 Confirmando idade")
-    btn_idade.click()
-    time.sleep(1)
-
-    # Abrir cadastro
-    btn_cadastro = wait.until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "//button[contains(@class, 'sign-up') and contains(text(), 'Cadastre-se')]",
-            )
-        )
-    )
-    print("📝 Abrindo modal de cadastro")
-    btn_cadastro.click()
-    time.sleep(2)
-
-    # Preencher dados
-    print("⌨️ Preenchendo e-mail, senha e CPF")
-    wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(email)
-    wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(
-        "SenhaSegura123"
-    )
-    wait.until(EC.presence_of_element_located((By.NAME, "cpf"))).send_keys(cpf)
-
-    # Marcar termos
-    checkbox = wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="terms"]'))
-    )
-    driver.execute_script("arguments[0].click();", checkbox)
-
-    # Esperar widget Turnstile aparecer
-    print("🛡️ Aguarde o CAPTCHA ser resolvido manualmente...")
-    WebDriverWait(driver, 180).until(
-        EC.element_to_be_clickable(
-            (By.XPATH, "//button[contains(text(), 'Comece já') and not(@disabled)]")
-        )
-    )
-    print("✅ CAPTCHA resolvido! Enviando cadastro...")
-
-    # Clicar no botão "Comece já"
-    driver.find_element(By.XPATH, "//button[contains(text(), 'Comece já')]").click()
-    print(f"🎉 Cadastro finalizado com sucesso para {email}!")
-
-except Exception as e:
-    print(f"❌ Erro durante o processo: {e}")
-
-input("🔚 Pressione ENTER para sair...")
-driver.quit()
+for t in threads:
+    t.join()
