@@ -59,7 +59,9 @@ def executar_proximo(pos_x):
     global indice_atual
     with indice_lock:
         if indice_atual >= len(linhas):
-            print(f"[{agora()}] 🛘 Nenhum dado restante para nova tentativa.")
+            print(
+                f"[{agora()}] 🛘 Nenhum dado restante para nova tentativa, finalize o programa. CTRL + C"
+            )
             return
         cpf, name, email = linhas[indice_atual].split(";")
         indice_atual += 1
@@ -251,9 +253,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
         with open("cadastros_falha.txt", "a", encoding="utf-8") as f:
             f.write(f"{cpf};{name};{email}\n")
 
-    print(f"[{agora()}] ✅ Navegador finalizado para {email}. Ele permanecerá aberto.")
-    input("🔚 Pressione ENTER para encerrar esta aba manualmente...")
-    driver.quit()
+    print(f"[{agora()}] ✅ Navegador finalizado para {email}.")
 
 
 def iniciar_ciclo():
