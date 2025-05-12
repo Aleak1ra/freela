@@ -98,11 +98,11 @@ def executar(cpf, name, email, pos_x, tentativa=1):
         "Page.addScriptToEvaluateOnNewDocument",
         {
             "source": """
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-            Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR', 'pt']});
-            Object.defineProperty(window, 'chrome', {get: () => true});
-            """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR', 'pt']});
+        Object.defineProperty(window, 'chrome', {get: () => true});
+        """
         },
     )
 
@@ -175,13 +175,16 @@ def executar(cpf, name, email, pos_x, tentativa=1):
         driver.execute_script("arguments[0].click();", checkbox)
 
         cpf_ja_cadastrado = driver.find_elements(
-            By.XPATH, "//span[contains(text(), 'O CPF já está cadastrado')]"
+            By.XPATH,
+            "//span[contains(text(), 'O CPF já está cadastrado')] | //div[contains(text(), 'CPF tem problemas judiciais ou está na lista negra.')]",
         )
         if cpf_ja_cadastrado:
             print(
-                f"[{agora()}] ⚠️ CPF já cadastrado para {email}. Tentando com o próximo dado..."
+                f"[{agora()}] ⚠️ CPF inválido (já cadastrado ou com problemas judiciais) para {email}. Pulando para o próximo dado..."
             )
             emails_falha.append(email)
+            with open("cadastros_falha.txt", "a", encoding="utf-8") as f:
+                f.write(f"{cpf};{name};{email}\n")
             driver.quit()
             executar_proximo(pos_x)
             return
@@ -216,12 +219,16 @@ def executar(cpf, name, email, pos_x, tentativa=1):
         if url_depois != url_antes:
             print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
             emails_sucesso.append(email)
+            with open("cadastros_sucesso.txt", "a", encoding="utf-8") as f:
+                f.write(f"{cpf};{name};{email}\n")
         else:
             if tentativa >= 2:
                 print(
                     f"[{agora()}] ❌ Falha persistente no cadastro para {email}. Máximo de tentativas atingido."
                 )
                 emails_falha.append(email)
+                with open("cadastros_falha.txt", "a", encoding="utf-8") as f:
+                    f.write(f"{cpf};{name};{email}\n")
                 return
             print(
                 f"[{agora()}] ❌ Cadastro pode ter falhado (sem redirecionamento) para {email}. Tentando novamente... (tentativa {tentativa + 1})"
@@ -233,6 +240,8 @@ def executar(cpf, name, email, pos_x, tentativa=1):
     except Exception as e:
         print(f"[{agora()}] ❌ Erro durante o processo com {email}: {e}")
         emails_falha.append(email)
+        with open("cadastros_falha.txt", "a", encoding="utf-8") as f:
+            f.write(f"{cpf};{name};{email}\n")
 
     print(f"[{agora()}] ✅ Navegador finalizado para {email}. Ele permanecerá aberto.")
     input("🔚 Pressione ENTER para encerrar esta aba manualmente...")
