@@ -48,6 +48,19 @@ screen_width = monitor.width
 
 emails_sucesso = []
 emails_falha = []
+indice_lock = threading.Lock()
+indice_atual = 0
+
+
+def executar_proximo(pos_x):
+    global indice_atual
+    with indice_lock:
+        if indice_atual >= len(linhas):
+            print(f"[{agora()}] 🛘 Nenhum dado restante para nova tentativa.")
+            return
+        cpf, name, email = linhas[indice_atual].split(";")
+        indice_atual += 1
+    executar(cpf, name, email, pos_x)
 
 
 def executar(cpf, name, email, pos_x):
@@ -66,7 +79,7 @@ def executar(cpf, name, email, pos_x):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-infobars")
     options.add_argument("--window-size=360,640")
-    options.add_argument("--disable-webrtc")  # 🛡️ Evita vazamento via WebRTC
+    options.add_argument("--disable-webrtc")
     options.add_argument("--incognito")
     options.add_argument(f"user-agent={user_agent}")
     options.add_argument("--lang=pt-BR")
@@ -81,31 +94,15 @@ def executar(cpf, name, email, pos_x):
         use_subprocess=True,
     )
 
-    # 🛡️ Anti-fingerprint: remover sinal de automação
     driver.execute_cdp_cmd(
         "Page.addScriptToEvaluateOnNewDocument",
         {
             "source": """
-            // Remove navigator.webdriver
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-
-            // Fake plugins
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [1, 2, 3, 4, 5]
-            });
-
-            // Fake languages
-            Object.defineProperty(navigator, 'languages', {
-                get: () => ['pt-BR', 'pt']
-            });
-
-            // Fake screen properties
-            Object.defineProperty(window, 'chrome', {
-                get: () => true
-            });
-            """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR', 'pt']});
+        Object.defineProperty(window, 'chrome', {get: () => true});
+        """
         },
     )
 
@@ -117,51 +114,47 @@ def executar(cpf, name, email, pos_x):
     try:
         print(f"[{agora()}] ✅ Página carregada")
 
-        btn_cookie = wait.until(
+        wait.until(
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
                     "//div[contains(@class, 'policy-regulation-button-container')]//button[contains(text(), 'ACEITAR TODOS OS COOKIES')]",
                 )
             )
-        )
+        ).click()
         print(f"[{agora()}] 🍪 Aceitando cookies")
-        btn_cookie.click()
         time.sleep(1)
 
-        btn_idade = wait.until(
+        wait.until(
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
                     "//div[contains(@class, 'buttons')]//button[contains(text(), 'Eu tenho mais de 18 anos')]",
                 )
             )
-        )
+        ).click()
         print(f"[{agora()}] 🔞 Confirmando idade")
-        btn_idade.click()
         time.sleep(1)
 
-        btn_cadastro = wait.until(
+        wait.until(
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
                     "//button[contains(@class, 'sign-up') and contains(text(), 'Cadastre-se')]",
                 )
             )
-        )
+        ).click()
         print(f"[{agora()}] 📝 Abrindo modal de cadastro")
-        btn_cadastro.click()
         time.sleep(2)
 
-        print(f"[{agora()}] ⌨️ Preenchendo e-mail, senha e CPF")
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(
             email
         )
         wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(
             "SenhaSegura123"
         )
+        print(f"[{agora()}] ⌨️ Preenchendo e-mail e senha")
 
-        print(f"[{agora()}] ⌨️ Digitando CPF com ActionChains...")
         cpf_input = wait.until(
             EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, 'input[data-testid="national-id"]')
@@ -174,23 +167,60 @@ def executar(cpf, name, email, pos_x):
             actions.send_keys(char)
             actions.pause(0.1)
         actions.perform()
+        print(f"[{agora()}] ✉️ Digitando CPF")
 
         checkbox = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="terms"]'))
         )
         driver.execute_script("arguments[0].click();", checkbox)
 
-        print(f"[{agora()}] 🛡️ Aguardando o CAPTCHA ser resolvido manualmente...")
-        WebDriverWait(driver, 180).until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//button[contains(text(), 'Comece já') and not(@disabled)]")
-            )
+        cpf_ja_cadastrado = driver.find_elements(
+            By.XPATH, "//span[contains(text(), 'O CPF já está cadastrado')]"
         )
-        print(f"[{agora()}] ✅ CAPTCHA resolvido! Enviando cadastro...")
+        if cpf_ja_cadastrado:
+            print(
+                f"[{agora()}] ⚠️ CPF já cadastrado para {email}. Tentando com o próximo dado..."
+            )
+            emails_falha.append(email)
+            driver.quit()
+            executar_proximo(pos_x)
+            return
 
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Comece já')]").click()
-        print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
-        emails_sucesso.append(email)
+        print(f"[{agora()}] 🛡️ Aguardando o CAPTCHA ser resolvido...")
+        try:
+            WebDriverWait(driver, 180).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//button[contains(text(), 'Comece já') and not(@disabled)]",
+                    )
+                )
+            )
+            print(f"[{agora()}] ✅ CAPTCHA resolvido! Enviando cadastro...")
+        except Exception:
+            print(
+                f"[{agora()}] ❌ CAPTCHA falhou para {email}. Reiniciando com os mesmos dados..."
+            )
+            driver.quit()
+            executar(cpf, name, email, pos_x)
+            return
+
+        botao_comecar = driver.find_element(
+            By.XPATH, "//button[contains(text(), 'Comece já')]"
+        )
+        url_antes = driver.current_url
+        botao_comecar.click()
+        time.sleep(3)
+        url_depois = driver.current_url
+
+        if url_depois != url_antes:
+            print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
+            emails_sucesso.append(email)
+        else:
+            print(
+                f"[{agora()}] ❌ Cadastro pode ter falhado (sem redirecionamento) para {email}."
+            )
+            emails_falha.append(email)
 
     except Exception as e:
         print(f"[{agora()}] ❌ Erro durante o processo com {email}: {e}")
@@ -199,11 +229,6 @@ def executar(cpf, name, email, pos_x):
     print(f"[{agora()}] ✅ Navegador finalizado para {email}. Ele permanecerá aberto.")
     input("🔚 Pressione ENTER para encerrar esta aba manualmente...")
     driver.quit()
-
-
-# Quantas instâncias abrir
-indice_atual = 0
-total_linhas = len(linhas)
 
 
 def iniciar_ciclo():
@@ -218,22 +243,23 @@ def iniciar_ciclo():
         print("❌ Entrada inválida.")
         return True
 
-    if indice_atual >= total_linhas:
+    if indice_atual >= len(linhas):
         print(
             "⚠️ Todos os dados já foram utilizados. Nenhum ciclo adicional será executado."
         )
         return False
 
     for i in range(qtd):
-        if indice_atual >= total_linhas:
+        if indice_atual >= len(linhas):
             print("🚫 Não há mais CPFs/emails disponíveis para novo ciclo.")
             break
-        cpf, name, email = linhas[indice_atual].split(";")
+        with indice_lock:
+            cpf, name, email = linhas[indice_atual].split(";")
+            indice_atual += 1
         pos_x = (i * WINDOW_WIDTH) % screen_width
         t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
         t.start()
         threads.append(t)
-        indice_atual += 1
         time.sleep(1)
 
     for t in threads:
