@@ -50,6 +50,9 @@ emails_sucesso = []
 emails_falha = []
 indice_lock = threading.Lock()
 indice_atual = 0
+cadastros_ativos = 0
+cadastros_sucesso_necessarios = 0
+sucessos_no_ciclo = 0
 
 
 def executar_proximo(pos_x):
@@ -64,6 +67,7 @@ def executar_proximo(pos_x):
 
 
 def executar(cpf, name, email, pos_x, tentativa=1):
+    global sucessos_no_ciclo
     print(f"\n[{agora()}] 🖥️ Iniciando navegador na posição X={pos_x} com:")
     print(f"   👤 Nome: {name}")
     print(f"   📧 Email: {email}")
@@ -191,7 +195,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
 
         print(f"[{agora()}] 🛡️ Aguardando o CAPTCHA ser resolvido...")
         try:
-            WebDriverWait(driver, 180).until(
+            WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable(
                     (
                         By.XPATH,
@@ -202,7 +206,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
             print(f"[{agora()}] ✅ CAPTCHA resolvido! Enviando cadastro...")
         except Exception:
             print(
-                f"[{agora()}] ❌ CAPTCHA falhou para {email}. Reiniciando com os mesmos dados..."
+                f"[{agora()}] ❌ CAPTCHA não resolvido em 5 segundos para {email}. Reiniciando com os mesmos dados..."
             )
             driver.quit()
             executar(cpf, name, email, pos_x, tentativa)
@@ -221,6 +225,8 @@ def executar(cpf, name, email, pos_x, tentativa=1):
             emails_sucesso.append(email)
             with open("cadastros_sucesso.txt", "a", encoding="utf-8") as f:
                 f.write(f"{cpf};{name};{email}\n")
+            global cadastros_ativos
+            cadastros_ativos -= 1
         else:
             if tentativa >= 2:
                 print(
@@ -229,6 +235,8 @@ def executar(cpf, name, email, pos_x, tentativa=1):
                 emails_falha.append(email)
                 with open("cadastros_falha.txt", "a", encoding="utf-8") as f:
                     f.write(f"{cpf};{name};{email}\n")
+                driver.quit()
+                executar_proximo(pos_x)
                 return
             print(
                 f"[{agora()}] ❌ Cadastro pode ter falhado (sem redirecionamento) para {email}. Tentando novamente... (tentativa {tentativa + 1})"
@@ -249,8 +257,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
 
 
 def iniciar_ciclo():
-    global indice_atual
-    threads = []
+    global indice_atual, cadastros_ativos, cadastros_sucesso_necessarios, sucessos_no_ciclo
     emails_sucesso.clear()
     emails_falha.clear()
 
@@ -266,6 +273,10 @@ def iniciar_ciclo():
         )
         return False
 
+    cadastros_ativos = qtd
+    cadastros_sucesso_necessarios = qtd
+    sucessos_no_ciclo = 0
+
     for i in range(qtd):
         if indice_atual >= len(linhas):
             print("🚫 Não há mais CPFs/emails disponíveis para novo ciclo.")
@@ -274,13 +285,11 @@ def iniciar_ciclo():
             cpf, name, email = linhas[indice_atual].split(";")
             indice_atual += 1
         pos_x = (i * WINDOW_WIDTH) % screen_width
-        t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
-        t.start()
-        threads.append(t)
+        threading.Thread(target=executar, args=(cpf, name, email, pos_x)).start()
         time.sleep(1)
 
-    for t in threads:
-        t.join()
+    while len(emails_sucesso) < cadastros_sucesso_necessarios:
+        time.sleep(2)
 
     print("\n📊 RESUMO DO CICLO:")
     print(f"✅ Cadastros bem-sucedidos: {len(emails_sucesso)}")
