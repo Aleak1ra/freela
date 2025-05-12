@@ -195,7 +195,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
 
         print(f"[{agora()}] 🛡️ Aguardando o CAPTCHA ser resolvido...")
         try:
-            WebDriverWait(driver, 5).until(
+            WebDriverWait(driver, 8).until(
                 EC.element_to_be_clickable(
                     (
                         By.XPATH,
@@ -206,7 +206,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
             print(f"[{agora()}] ✅ CAPTCHA resolvido! Enviando cadastro...")
         except Exception:
             print(
-                f"[{agora()}] ❌ CAPTCHA não resolvido em 5 segundos para {email}. Reiniciando com os mesmos dados..."
+                f"[{agora()}] ❌ CAPTCHA não resolvido em 8 segundos para {email}. Reiniciando com os mesmos dados..."
             )
             driver.quit()
             executar(cpf, name, email, pos_x, tentativa)
@@ -228,7 +228,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
             global cadastros_ativos
             cadastros_ativos -= 1
         else:
-            if tentativa >= 2:
+            if tentativa >= 1:
                 print(
                     f"[{agora()}] ❌ Falha persistente no cadastro para {email}. Máximo de tentativas atingido."
                 )
@@ -300,7 +300,8 @@ def iniciar_ciclo():
     for email in emails_falha:
         print(f"   - {email}")
 
-    return True
+    resposta = input("\n🔄 Deseja rodar mais um ciclo? (s/n): ").strip().lower()
+    return resposta == "s"
 
 
 try:
@@ -318,12 +319,6 @@ try:
             else:
                 print("✅ Execução finalizada.")
                 break
-
-        resposta = input("\n🔄 Deseja rodar mais um ciclo? (s/n): ").strip().lower()
-        if resposta != "s":
-            print("✅ Execução finalizada.")
-            break
-
 except KeyboardInterrupt:
     print(
         f"\n[{agora()}] 🛑 Execução interrompida com Ctrl+C. Os navegadores continuarão abertos."
