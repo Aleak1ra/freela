@@ -66,12 +66,13 @@ def executar(cpf, name, email, pos_x):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-infobars")
     options.add_argument("--window-size=360,640")
+    options.add_argument("--disable-webrtc")  # 🛡️ Evita vazamento via WebRTC
     options.add_argument("--incognito")
     options.add_argument(f"user-agent={user_agent}")
+    options.add_argument("--lang=pt-BR")
     options.add_experimental_option(
         "prefs", {"profile.default_content_setting_values.notifications": 2}
     )
-    options.add_argument("--lang=pt-BR")
 
     driver = uc.Chrome(
         driver_executable_path=driver_path,
@@ -79,6 +80,35 @@ def executar(cpf, name, email, pos_x):
         headless=False,
         use_subprocess=True,
     )
+
+    # 🛡️ Anti-fingerprint: remover sinal de automação
+    driver.execute_cdp_cmd(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {
+            "source": """
+            // Remove navigator.webdriver
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+
+            // Fake plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+
+            // Fake languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['pt-BR', 'pt']
+            });
+
+            // Fake screen properties
+            Object.defineProperty(window, 'chrome', {
+                get: () => true
+            });
+            """
+        },
+    )
+
     driver.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     driver.set_window_position(pos_x, 0)
     driver.get(link)
@@ -172,22 +202,44 @@ def executar(cpf, name, email, pos_x):
 
 
 # Quantas instâncias abrir
-qtd = int(input("Quantas instâncias deseja abrir? "))
-threads = []
+indice_atual = 0
+total_linhas = len(linhas)
 
-try:
-    for i in range(min(qtd, len(linhas))):
-        cpf, name, email = linhas[i].split(";")
+
+def iniciar_ciclo():
+    global indice_atual
+    threads = []
+    emails_sucesso.clear()
+    emails_falha.clear()
+
+    try:
+        qtd = int(input("Quantas instâncias deseja abrir neste ciclo? "))
+    except ValueError:
+        print("❌ Entrada inválida.")
+        return True
+
+    if indice_atual >= total_linhas:
+        print(
+            "⚠️ Todos os dados já foram utilizados. Nenhum ciclo adicional será executado."
+        )
+        return False
+
+    for i in range(qtd):
+        if indice_atual >= total_linhas:
+            print("🚫 Não há mais CPFs/emails disponíveis para novo ciclo.")
+            break
+        cpf, name, email = linhas[indice_atual].split(";")
         pos_x = (i * WINDOW_WIDTH) % screen_width
         t = threading.Thread(target=executar, args=(cpf, name, email, pos_x))
         t.start()
         threads.append(t)
+        indice_atual += 1
         time.sleep(1)
 
     for t in threads:
         t.join()
 
-    print("\n📊 RESUMO FINAL:")
+    print("\n📊 RESUMO DO CICLO:")
     print(f"✅ Cadastros bem-sucedidos: {len(emails_sucesso)}")
     for email in emails_sucesso:
         print(f"   - {email}")
@@ -195,6 +247,20 @@ try:
     print(f"\n❌ Cadastros com erro: {len(emails_falha)}")
     for email in emails_falha:
         print(f"   - {email}")
+
+    return True
+
+
+try:
+    while True:
+        executado = iniciar_ciclo()
+        if not executado:
+            break
+
+        resposta = input("\n🔄 Deseja rodar mais um ciclo? (s/n): ").strip().lower()
+        if resposta != "s":
+            print("✅ Execução finalizada.")
+            break
 
 except KeyboardInterrupt:
     print(
