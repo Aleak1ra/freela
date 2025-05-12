@@ -12,7 +12,8 @@ from datetime import datetime
 from webdriver_manager.chrome import ChromeDriverManager
 
 # CONFIGURACAO MANUAL DO NUMERO DE INSTANCIAS POR CICLO
-INSTANCIAS_POR_CICLO = 2
+INSTANCIAS_POR_CICLO = 4
+SENHA_PADRAO = "SenhaSegura123"
 
 driver_path = ChromeDriverManager().install()
 
@@ -151,7 +152,7 @@ def executar(cpf, name, email, pos_x, tentativa=1):
             email
         )
         wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(
-            "SenhaSegura123"
+            SENHA_PADRAO
         )
         print(f"[{agora()}] ⌨️ Preenchendo e-mail e senha")
 
