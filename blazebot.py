@@ -60,10 +60,10 @@ def executar_proximo(pos_x):
             return
         cpf, name, email = linhas[indice_atual].split(";")
         indice_atual += 1
-    executar(cpf, name, email, pos_x)
+    executar(cpf, name, email, pos_x, tentativa=1)
 
 
-def executar(cpf, name, email, pos_x):
+def executar(cpf, name, email, pos_x, tentativa=1):
     print(f"\n[{agora()}] 🖥️ Iniciando navegador na posição X={pos_x} com:")
     print(f"   👤 Nome: {name}")
     print(f"   📧 Email: {email}")
@@ -98,11 +98,11 @@ def executar(cpf, name, email, pos_x):
         "Page.addScriptToEvaluateOnNewDocument",
         {
             "source": """
-        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-        Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR', 'pt']});
-        Object.defineProperty(window, 'chrome', {get: () => true});
-        """
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+            Object.defineProperty(navigator, 'languages', {get: () => ['pt-BR', 'pt']});
+            Object.defineProperty(window, 'chrome', {get: () => true});
+            """
         },
     )
 
@@ -202,7 +202,7 @@ def executar(cpf, name, email, pos_x):
                 f"[{agora()}] ❌ CAPTCHA falhou para {email}. Reiniciando com os mesmos dados..."
             )
             driver.quit()
-            executar(cpf, name, email, pos_x)
+            executar(cpf, name, email, pos_x, tentativa)
             return
 
         botao_comecar = driver.find_element(
@@ -217,10 +217,18 @@ def executar(cpf, name, email, pos_x):
             print(f"[{agora()}] 🎉 Cadastro finalizado com sucesso para {email}!")
             emails_sucesso.append(email)
         else:
+            if tentativa >= 2:
+                print(
+                    f"[{agora()}] ❌ Falha persistente no cadastro para {email}. Máximo de tentativas atingido."
+                )
+                emails_falha.append(email)
+                return
             print(
-                f"[{agora()}] ❌ Cadastro pode ter falhado (sem redirecionamento) para {email}."
+                f"[{agora()}] ❌ Cadastro pode ter falhado (sem redirecionamento) para {email}. Tentando novamente... (tentativa {tentativa + 1})"
             )
-            emails_falha.append(email)
+            driver.quit()
+            executar(cpf, name, email, pos_x, tentativa + 1)
+            return
 
     except Exception as e:
         print(f"[{agora()}] ❌ Erro durante o processo com {email}: {e}")
@@ -281,7 +289,17 @@ try:
     while True:
         executado = iniciar_ciclo()
         if not executado:
-            break
+            resposta = (
+                input("\n⚠️ Dados esgotados. Deseja reiniciar do início? (s/n): ")
+                .strip()
+                .lower()
+            )
+            if resposta == "s":
+                indice_atual = 0
+                continue
+            else:
+                print("✅ Execução finalizada.")
+                break
 
         resposta = input("\n🔄 Deseja rodar mais um ciclo? (s/n): ").strip().lower()
         if resposta != "s":
