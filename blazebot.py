@@ -3,6 +3,7 @@ from selenium.webdriver.chrome.service import Service
 import random
 import time
 import os
+import sys
 import threading
 from screeninfo import get_monitors
 from datetime import datetime
@@ -13,11 +14,13 @@ INSTANCIAS_POR_CICLO = 2
 SENHA_PADRAO = "SenhaSegura123"
 WINDOW_WIDTH = 360
 WINDOW_HEIGHT = 640
-DADOS_FILE = "names_cpfs_emails.txt"
-DADOS_USADOS_FILE = "dados_usados.txt"
-PROXIES_FILE = "proxies.txt"
-PROXIES_USADAS_FILE = "proxies_usadas.txt"
-LINK_FILE = "link.txt"
+BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+
+DADOS_FILE = os.path.join(BASE_DIR, "names_cpfs_emails.txt")
+DADOS_USADOS_FILE = os.path.join(BASE_DIR, "dados_usados.txt")
+PROXIES_FILE = os.path.join(BASE_DIR, "proxies.txt")
+PROXIES_USADAS_FILE = os.path.join(BASE_DIR, "proxies_usadas.txt")
+LINK_FILE = os.path.join(BASE_DIR, "link.txt")
 driver_path = ChromeDriverManager().install()
 
 monitor = get_monitors()[0]
