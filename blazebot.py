@@ -33,6 +33,9 @@ indice_atual = 0
 
 usar_proxy = None  # Controla se vai usar proxy
 
+# Evento para fechar todos os navegadores juntos
+fechar_event = threading.Event()
+
 
 def agora():
     return datetime.now().strftime("%H:%M:%S")
@@ -40,7 +43,6 @@ def agora():
 
 def gerar_user_agents(qtd=30):
     user_agents = [
-        # ... (sua lista, mantida)
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.199 Safari/537.36",
         "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6110.102 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.129 Safari/537.36",
@@ -247,8 +249,9 @@ def executar(cpf, name, email, pos_x, proxy_usada):
             "http": f"http://{proxy_url}",
             "https": f"http://{proxy_url}",
         }
-
-    print(f"   🆔 USER-AGENT: {user_agent}\n")
+        print(f"[{agora()}] 🌐 Proxy utilizada: {proxy_usada}")
+    else:
+        print(f"[{agora()}] 🚫 Sem proxy utilizada (conexão direta)")
 
     options = webdriver.ChromeOptions()
     options.add_argument("--disable-popup-blocking")
@@ -301,14 +304,26 @@ def executar(cpf, name, email, pos_x, proxy_usada):
     driver.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     driver.set_window_position(pos_x, 0)
 
-    # >>>>>> ABRA O LINK AQUI <<<<<<
+    # LOGA O IP
+    try:
+        driver.get("https://api.ipify.org/")
+        time.sleep(2)
+        ip = driver.find_element("tag name", "body").text.strip()
+        print(f"[{agora()}] 🌍 IP utilizado para a navegação: {ip}")
+    except Exception as e:
+        print(f"[{agora()}] 🌍 Erro ao obter IP: {e}")
+
+    print(f"   🆔 USER-AGENT: {user_agent}\n")
+
+    # Abre o link real após logar IP
     with open(LINK_FILE, "r", encoding="utf-8") as f:
         link = f.read().strip()
     if not link.startswith("http"):
         link = "https://" + link
     driver.get(link)
 
-    input(f"[{agora()}] 📝 Analise o navegador. Pressione Enter para fechar...")
+    # Aguarda o evento para fechar TODOS juntos
+    fechar_event.wait()
     driver.quit()
 
 
@@ -342,8 +357,15 @@ def iniciar_ciclo():
         threads.append(t)
         time.sleep(1)
 
+    # Um único input para fechar todos
+    input(
+        f"[{agora()}] 📝 Analise os navegadores. Pressione Enter para fechar todos..."
+    )
+    fechar_event.set()  # Sinaliza para todas as threads fecharem
+
     for t in threads:
         t.join()
+    fechar_event.clear()  # Reseta o evento para o próximo ciclo
 
     print("\n📊 RESUMO DO CICLO:")
     print(f"✅ Sucesso: {len(emails_sucesso)}")
