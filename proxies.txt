@@ -1,0 +1,10 @@
+23.129.252.181:6449:SuperFlashProxy:FlashProxyProxy
+85.198.47.17:6285:SuperFlashProxy:FlashProxyProxy
+91.123.8.201:6741:SuperFlashProxy:FlashProxyProxy
+92.112.175.94:6367:SuperFlashProxy:FlashProxyProxy
+185.72.240.241:7277:SuperFlashProxy:FlashProxyProxy
+23.129.252.3:6271:SuperFlashProxy:FlashProxyProxy
+85.198.45.141:6065:SuperFlashProxy:FlashProxyProxy
+91.123.8.42:6582:SuperFlashProxy:FlashProxyProxy
+92.112.200.11:6594:SuperFlashProxy:FlashProxyProxy
+185.72.240.157:7193:SuperFlashProxy:FlashProxyProxy

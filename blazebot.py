@@ -9,7 +9,7 @@ from datetime import datetime
 from webdriver_manager.chrome import ChromeDriverManager
 import re
 
-INSTANCIAS_POR_CICLO = 4
+INSTANCIAS_POR_CICLO = 2
 SENHA_PADRAO = "SenhaSegura123"
 WINDOW_WIDTH = 360
 WINDOW_HEIGHT = 640
@@ -23,22 +23,37 @@ driver_path = ChromeDriverManager().install()
 monitor = get_monitors()[0]
 screen_width = monitor.width
 
+emails_sucesso = []
+emails_falha = []
 indice_lock = threading.Lock()
+indice_atual = 0
+
+usar_proxy = None  # Controla se vai usar proxy
 
 
 def agora():
     return datetime.now().strftime("%H:%M:%S")
 
 
-def agora_full():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
 def gerar_user_agents(qtd=30):
     user_agents = [
+        # ... (sua lista, mantida)
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.199 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6110.102 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.129 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.199 Safari/537.36",
         "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Mobile Safari/537.36",
-        # ... outros user agents ...
+        "Mozilla/5.0 (Linux; Android 12; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.89 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPad; CPU OS 16_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.2 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPad; CPU OS 14_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13.3; rv:114.0) Gecko/20100101 Firefox/114.0",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:110.0) Gecko/20100101 Firefox/110.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.199 Safari/537.36 Edg/120.0.2210.61",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Safari/605.1.15",
     ]
     extra = []
     for i in range(qtd - len(user_agents)):
@@ -149,14 +164,9 @@ def remover_linha_arquivo(arquivo, linha_remover):
                 f.write(l)
 
 
-def adicionar_bloco_usados(arquivo, usadas):
-    if not usadas:
-        return
+def adicionar_linha_arquivo(arquivo, linha):
     with open(arquivo, "a", encoding="utf-8") as f:
-        f.write(f"\n[{agora_full()}] Usada nesta execução\n")
-        for item in usadas:
-            f.write(item.strip() + "\n")
-        f.write("\n")
+        f.write(linha.strip() + "\n")
 
 
 def parse_proxy(proxy_str):
@@ -172,7 +182,53 @@ def parse_proxy(proxy_str):
         raise ValueError("Formato de proxy inválido")
 
 
+def perguntar_uso_proxy():
+    global usar_proxy
+    while True:
+        resposta = input("Deseja usar proxy? (S/N): ").strip().lower()
+        if resposta in ["s", "n"]:
+            usar_proxy = resposta == "s"
+            break
+        print("Digite S para sim ou N para não.")
+
+
+def executar_proximo(pos_x):
+    global indice_atual
+    with indice_lock:
+        linhas = ler_arquivo(DADOS_FILE)
+        proxies = ler_arquivo(PROXIES_FILE)
+        if indice_atual >= len(linhas):
+            print(f"[{agora()}] 🛘 Nenhum dado restante para nova tentativa.")
+            return
+        linha_dados = linhas[indice_atual]
+        indice_atual += 1
+    try:
+        cpf, name, email = linha_dados.split(";")
+    except Exception as e:
+        print(f"[{agora()}] ⚠️ Erro ao processar dados: {linha_dados} ({e})")
+        return
+
+    remover_linha_arquivo(DADOS_FILE, linha_dados)
+    adicionar_linha_arquivo(DADOS_USADOS_FILE, linha_dados)
+
+    proxy_usada = None
+    if usar_proxy:
+        proxies = ler_arquivo(PROXIES_FILE)
+        proxy_str = random.choice(proxies) if proxies else None
+        if proxy_str:
+            proxy_usada = proxy_str
+            remover_linha_arquivo(PROXIES_FILE, proxy_usada)
+            adicionar_linha_arquivo(PROXIES_USADAS_FILE, proxy_usada)
+
+    executar(cpf, name, email, pos_x, proxy_usada)
+
+
 def executar(cpf, name, email, pos_x, proxy_usada):
+    print(f"\n[{agora()}] 🖥️ Iniciando navegador na posição X={pos_x} com:")
+    print(f"   👤 Nome: {name}")
+    print(f"   📧 Email: {email}")
+    print(f"   🆔 CPF: {cpf}\n")
+
     if user_agents_list:
         user_agent = user_agents_list.pop(random.randrange(len(user_agents_list)))
     else:
@@ -189,6 +245,8 @@ def executar(cpf, name, email, pos_x, proxy_usada):
             "https": f"http://{proxy_url}",
         }
 
+    print(f"   🆔 USER-AGENT: {user_agent}\n")
+
     options = webdriver.ChromeOptions()
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--disable-blink-features=AutomationControlled")
@@ -199,7 +257,6 @@ def executar(cpf, name, email, pos_x, proxy_usada):
     options.add_argument("--window-size=360,640")
     options.add_argument("--disable-webrtc")
     options.add_argument("--incognito")
-    options.add_argument("--app=https://ssl-judge2.api.proxyscrape.com/")
     options.add_argument(f"user-agent={user_agent}")
     options.add_argument(f"--lang={accept_lang}")
     options.add_experimental_option(
@@ -240,52 +297,67 @@ def executar(cpf, name, email, pos_x, proxy_usada):
 
     driver.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     driver.set_window_position(pos_x, 0)
+
+    # >>>>>> ABRA O LINK AQUI <<<<<<
+    with open(LINK_FILE, "r", encoding="utf-8") as f:
+        link = f.read().strip()
+    if not link.startswith("http"):
+        link = "https://" + link
+    driver.get(link)
+
     input(f"[{agora()}] 📝 Analise o navegador. Pressione Enter para fechar...")
     driver.quit()
 
 
 def iniciar_ciclo():
-    # Coleta as linhas e proxies do ciclo antes de rodar as threads!
-    linhas_ciclo = []
-    proxies_ciclo = []
-    with indice_lock:
-        linhas_todas = ler_arquivo(DADOS_FILE)
-        proxies_todas = ler_arquivo(PROXIES_FILE)
-        qtd = min(INSTANCIAS_POR_CICLO, len(linhas_todas), len(proxies_todas))
-        for i in range(qtd):
-            linhas_ciclo.append(linhas_todas[i])
-            proxies_ciclo.append(proxies_todas[i])
+    global indice_atual
+    emails_sucesso.clear()
+    emails_falha.clear()
+    linhas = ler_arquivo(DADOS_FILE)
+    proxies = ler_arquivo(PROXIES_FILE)
+    indice_atual = 0
 
+    if not linhas:
+        print("⚠️ Todos os dados já foram utilizados.")
+        return
+
+    if usar_proxy and not proxies:
+        print("⚠️ Todas as proxies já foram utilizadas.")
+        return
+
+    qtd = INSTANCIAS_POR_CICLO
     threads = []
-    for i, (linha_dados, proxy_str) in enumerate(zip(linhas_ciclo, proxies_ciclo)):
-        try:
-            cpf, name, email = linha_dados.split(";")
-        except Exception:
-            continue
+    for i in range(qtd):
+        linhas = ler_arquivo(DADOS_FILE)
+        proxies = ler_arquivo(PROXIES_FILE)
+        if indice_atual >= len(linhas) or (usar_proxy and not proxies):
+            print("🚫 Não há mais dados ou proxies disponíveis.")
+            break
         pos_x = (i * WINDOW_WIDTH) % screen_width
-        # Remove dos arquivos antes de rodar o navegador
-        remover_linha_arquivo(DADOS_FILE, linha_dados)
-        remover_linha_arquivo(PROXIES_FILE, proxy_str)
-        t = threading.Thread(target=executar, args=(cpf, name, email, pos_x, proxy_str))
+        t = threading.Thread(target=executar_proximo, args=(pos_x,))
         t.start()
         threads.append(t)
         time.sleep(1)
+
     for t in threads:
         t.join()
 
-    # Salva bloco de usados ao final do ciclo
-    adicionar_bloco_usados(PROXIES_USADAS_FILE, proxies_ciclo)
-    adicionar_bloco_usados(DADOS_USADOS_FILE, linhas_ciclo)
+    print("\n📊 RESUMO DO CICLO:")
+    print(f"✅ Sucesso: {len(emails_sucesso)}")
+    for email in emails_sucesso:
+        print(f"   - {email}")
+    print(f"\n❌ Falha: {len(emails_falha)}")
+    for email in emails_falha:
+        print(f"   - {email}")
 
 
 def main():
-    with open(LINK_FILE, "r", encoding="utf-8") as f:
-        link = f.read().strip()
+    perguntar_uso_proxy()
     try:
         while True:
             linhas = ler_arquivo(DADOS_FILE)
             proxies = ler_arquivo(PROXIES_FILE)
-            if not linhas or not proxies:
+            if not linhas or (usar_proxy and not proxies):
                 break
             iniciar_ciclo()
         print("✅ Todos os cadastros foram processados.")
